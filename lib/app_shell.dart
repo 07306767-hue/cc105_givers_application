@@ -66,7 +66,7 @@ class _RoleBasedAppShellState extends State<RoleBasedAppShell> {
       appBar: AppBar(
         title: Text(labels[safeIndex]),
         actions: [
-          if (kDebugMode)
+          if (kDebugMode && !kIsWeb)
             IconButton(
               tooltip: 'Test crash',
               onPressed: () => FirebaseCrashlytics.instance.crash(),
