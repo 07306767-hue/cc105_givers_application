@@ -1,0 +1,164 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function role() { return get(/databases/$(database)/documents/users/$(uid())).data.role; }
+
+    match /users/{userId} {
+      allow read: if signedIn() && uid() == userId;
+      allow create: if signedIn() && uid() == userId
+        && request.resource.data.role in ['organizer', 'vendor', 'attendee']
+        && request.resource.data.account_status == 'active';
+      allow update: if signedIn() && uid() == userId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.account_status == resource.data.account_status;
+      allow delete: if false;
+    }
+
+    match /public_profiles/{userId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && uid() == userId;
+      allow delete: if false;
+    }
+
+    match /organizer_profiles/{profileId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && uid() == profileId;
+      allow delete: if false;
+    }
+
+    match /vendor_profiles/{profileId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && uid() == profileId
+        && request.resource.data.verification_status == 'pending';
+      allow update: if signedIn() && uid() == profileId
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['verification_status'])
+          || request.resource.data.verification_status == resource.data.verification_status);
+      allow delete: if false;
+    }
+
+    match /events/{eventId} {
+      allow read: if signedIn()
+        && (resource.data.event_status == 'published'
+          || (role() == 'organizer'
+            && resource.data.organizer_profile_id == uid()));
+      allow create: if signedIn() && role() == 'organizer'
+        && request.resource.data.organizer_profile_id == uid()
+        && request.resource.data.event_status in ['draft', 'published']
+        && request.resource.data.total_slots <= 400;
+      allow update: if signedIn() && role() == 'organizer'
+        && resource.data.organizer_profile_id == uid();
+      allow delete: if false;
+    }
+
+    match /booth_slots/{slotId} {
+      allow read: if signedIn();
+      allow create, update: if signedIn() && role() == 'organizer'
+        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.organizer_profile_id == uid()
+        && request.resource.data.slot_status in ['open', 'reserved'];
+      allow delete: if false;
+    }
+
+    match /applications/{applicationId} {
+      allow read: if signedIn()
+        && (role() == 'vendor' && resource.data.vendor_profile_id == uid()
+          || role() == 'organizer'
+            && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid());
+      allow create: if signedIn() && role() == 'vendor'
+        && request.resource.data.vendor_profile_id == uid()
+        && request.resource.data.application_status == 'pending'
+        && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.booth_fee
+          == request.resource.data.booth_fee_amount
+        && get(/databases/$(database)/documents/booth_slots/$(request.resource.data.requested_slot_id)).data.slot_status == 'open';
+      allow update: if signedIn()
+        && (role() == 'organizer'
+          && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid()
+          && resource.data.application_status == 'pending'
+          && request.resource.data.application_status in ['approved', 'rejected']
+          || role() == 'vendor'
+          && resource.data.vendor_profile_id == uid()
+          && request.resource.data.application_status == resource.data.application_status);
+      allow delete: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if signedIn()
+        && (role() == 'vendor' && resource.data.vendor_profile_id == uid()
+          || role() == 'organizer'
+            && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid());
+      allow create: if signedIn() && role() == 'vendor'
+        && request.resource.data.vendor_profile_id == uid()
+        && request.resource.data.payment_status == 'pending'
+        && get(/databases/$(database)/documents/applications/$(request.resource.data.application_id)).data.vendor_profile_id == uid()
+        && get(/databases/$(database)/documents/applications/$(request.resource.data.application_id)).data.application_status == 'approved'
+        && get(/databases/$(database)/documents/applications/$(request.resource.data.application_id)).data.booth_fee_amount == request.resource.data.amount;
+      allow update: if signedIn() && role() == 'vendor'
+        && resource.data.vendor_profile_id == uid()
+        && resource.data.payment_status == 'pending'
+        && request.resource.data.payment_status in ['paid', 'failed'];
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if signedIn() && resource.data.recipient_user_id == uid();
+      allow update: if signedIn() && resource.data.recipient_user_id == uid()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_read', 'read_at']);
+      allow create: if signedIn()
+        && (role() == 'organizer'
+          && get(/databases/$(database)/documents/events/$(request.resource.data.related_event_id)).data.organizer_profile_id == uid()
+          || role() == 'vendor'
+          && get(/databases/$(database)/documents/applications/$(request.resource.data.related_application_id)).data.vendor_profile_id == uid())
+        && request.resource.data.notification_type in ['application', 'payment', 'event', 'lost_found'];
+      allow delete: if false;
+    }
+
+    match /lost_found_reports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.reporter_user_id == uid();
+      allow update: if signedIn()
+        && (resource.data.reporter_user_id == uid()
+          || role() == 'organizer'
+          && (!('event_id' in resource.data)
+            || get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid()))
+        && (role() != 'organizer'
+          || request.resource.data.report_status in ['open', 'matched', 'returned']);
+      allow delete: if false;
+    }
+
+    match /lost_found_claims/{claimId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.claimant_user_id == uid()
+        && get(/databases/$(database)/documents/lost_found_reports/$(request.resource.data.report_id)).data.report_type == 'found'
+        && request.resource.data.claim_status == 'pending';
+      allow update: if signedIn()
+        && role() == 'organizer'
+        && 'event_id' in get(/databases/$(database)/documents/lost_found_reports/$(resource.data.report_id)).data
+        && get(/databases/$(database)/documents/events/$(get(/databases/$(database)/documents/lost_found_reports/$(resource.data.report_id)).data.event_id)).data.organizer_profile_id == uid()
+        && request.resource.data.claim_status in ['approved', 'rejected'];
+      allow delete: if false;
+    }
+
+    match /event_intake_drafts/{draftId} {
+      allow read: if signedIn() && role() == 'organizer'
+        && resource.data.organizer_profile_id == uid();
+      allow create, update: if signedIn() && role() == 'organizer'
+        && request.resource.data.organizer_profile_id == uid();
+      allow delete: if false;
+    }
+
+    match /vendor_documents/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /password_reset_requests/{document=**} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
