@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "418799409767",
+    "project_id": "givents-database-cd1c1",
+    "storage_bucket": "givents-database-cd1c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:418799409767:android:84e543e1fd8b57a7a892c2",
+        "android_client_info": {
+          "package_name": "com.example.cc105_givers_documentation"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "418799409767-hd3ineltbn0ej3otgqs334s5m7fgf95g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFErQU_NMBRdAyx2J6qv8MFIcV_eCZrKo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "418799409767-hd3ineltbn0ej3otgqs334s5m7fgf95g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

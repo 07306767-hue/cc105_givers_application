@@ -14,7 +14,7 @@ import 'services/givents_services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: GiventsFirebaseOptions.current);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await connectFirebaseEmulators();
   await GiventsRemoteConfigService.instance.initialize();
   if (!kIsWeb) {

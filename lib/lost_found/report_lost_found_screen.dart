@@ -82,10 +82,17 @@ class _ReportLostFoundScreenState extends State<ReportLostFoundScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Report published.')));
       Navigator.of(context).pop();
-    } catch (_) {
+    } catch (e, stackTrace) {
+      debugPrint('LOST AND FOUND ERROR: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not publish report.')),
+        SnackBar(
+          content: Text('Could not publish report: $e'),
+          duration: const Duration(seconds: 8),
+        ),
       );
     } finally {
       if (mounted) setState(() => _publishing = false);

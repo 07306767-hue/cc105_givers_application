@@ -15,9 +15,13 @@ class OrganizerApplicationsScreen extends StatefulWidget {
 class _OrganizerApplicationsScreenState
     extends State<OrganizerApplicationsScreen> {
   final _search = TextEditingController();
+
   String _filter = 'All';
+
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _applications = [];
+
   bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -32,47 +36,86 @@ class _OrganizerApplicationsScreenState
   }
 
   Future<void> _load() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final events = await FirebaseFirestore.instance
-        .collection('events')
-        .where('organizer_profile_id', isEqualTo: uid)
-        .get();
-    final eventIds = events.docs.map((doc) => doc.id).toList();
-    final all = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    for (final eventId in eventIds) {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('applications')
-          .where('event_id', isEqualTo: eventId)
-          .get();
-      all.addAll(snapshot.docs);
-    }
     if (!mounted) return;
+
     setState(() {
-      _applications = all;
-      _loading = false;
+      _loading = true;
+      _error = null;
     });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        throw Exception('You are not logged in.');
+      }
+
+      final firestore = FirebaseFirestore.instance;
+
+      final events = await firestore
+          .collection('events')
+          .where('organizer_profile_id', isEqualTo: user.uid)
+          .get();
+
+      final all = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+      for (final event in events.docs) {
+        final snapshot = await firestore
+            .collection('applications')
+            .where('event_id', isEqualTo: event.id)
+            .get();
+
+        all.addAll(snapshot.docs);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _applications = all;
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      debugPrint('Applications loading error: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
   }
 
   List<QueryDocumentSnapshot<Map<String, dynamic>>> get _filtered {
     final term = _search.text.trim().toLowerCase();
+
     return _applications.where((application) {
       final data = application.data();
-      final status = data['application_status'] as String? ?? 'pending';
+
+      final status = (data['application_status'] as String? ?? 'pending')
+          .toLowerCase();
+
       final name = (data['vendor_name'] as String? ?? '').toLowerCase();
-      final statusMatches =
-          _filter == 'All' || status.toLowerCase() == _filter.toLowerCase();
+
+      final statusMatches = _filter == 'All' || status == _filter.toLowerCase();
+
       return statusMatches && (term.isEmpty || name.contains(term));
     }).toList();
   }
 
-  int _countStatus(String status) => _applications.where((application) {
-    return (application.data()['application_status'] as String? ?? 'pending') ==
-        status;
-  }).length;
+  int _countStatus(String status) {
+    return _applications.where((application) {
+      return (application.data()['application_status'] as String? ?? 'pending')
+              .toLowerCase() ==
+          status.toLowerCase();
+    }).length;
+  }
 
   @override
   Widget build(BuildContext context) {
     final filtered = _filtered;
+
     return Column(
       children: [
         Padding(
@@ -86,6 +129,7 @@ class _OrganizerApplicationsScreenState
             onChanged: (_) => setState(() {}),
           ),
         ),
+
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -103,46 +147,92 @@ class _OrganizerApplicationsScreenState
                     label: Text(
                       status == 'All'
                           ? 'All (${_applications.length})'
-                          : '$status (${status == 'Pending'
-                                ? _countStatus('pending')
-                                : status == 'Approved'
-                                ? _countStatus('approved')
-                                : _countStatus('rejected')})',
+                          : '$status (${_countStatus(status.toLowerCase())})',
                     ),
                     selected: _filter == status,
-                    onSelected: (_) => setState(() => _filter = status),
+                    onSelected: (_) {
+                      setState(() => _filter = status);
+                    },
                   ),
                 ),
             ],
           ),
         ),
+
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filtered.length,
-                  itemBuilder: (context, index) {
-                    final application = filtered[index];
-                    final data = application.data();
-                    return Card(
-                      child: ListTile(
-                        title: Text(data['vendor_name'] as String? ?? ''),
-                        subtitle: Text(
-                          '${data['application_status']} • ₱${(data['booth_fee_amount'] as num).toStringAsFixed(0)}',
+              : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          size: 48,
+                          color: Colors.red,
                         ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ApplicationDetailScreen(
-                              applicationId: application.id,
-                              onChanged: _load,
-                            ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Could not load applications.',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _load,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : filtered.isEmpty
+              ? Center(
+                  child: Text(
+                    _applications.isEmpty
+                        ? 'No applications yet.'
+                        : 'No matching applications found.',
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final application = filtered[index];
+                      final data = application.data();
+
+                      final status = data['application_status'] ?? 'pending';
+
+                      final fee = data['booth_fee_amount'] as num? ?? 0;
+
+                      return Card(
+                        child: ListTile(
+                          title: Text(data['vendor_name'] as String? ?? ''),
+                          subtitle: Text(
+                            '$status • ₱${fee.toStringAsFixed(0)}',
                           ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ApplicationDetailScreen(
+                                  applicationId: application.id,
+                                  onChanged: _load,
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
         ),
       ],
@@ -167,6 +257,7 @@ class ApplicationDetailScreen extends StatefulWidget {
 
 class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
   bool _busy = false;
+
   final _rejectionReason = TextEditingController();
 
   @override
@@ -177,14 +268,24 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
 
   Future<void> _updateStatus(String status) async {
     setState(() => _busy = true);
+
     try {
       final firestore = FirebaseFirestore.instance;
+
       final applicationRef = firestore
           .collection('applications')
           .doc(widget.applicationId);
+
       final application = await applicationRef.get();
+
+      if (!application.exists) {
+        throw Exception('Application not found.');
+      }
+
       final data = application.data()!;
+
       final batch = firestore.batch();
+
       batch.update(applicationRef, {
         'application_status': status,
         'rejection_reason': status == 'rejected'
@@ -192,6 +293,7 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
             : null,
         'reviewed_at': FieldValue.serverTimestamp(),
       });
+
       batch.set(firestore.collection('notifications').doc(), {
         'recipient_user_id': data['vendor_profile_id'],
         'related_event_id': data['event_id'],
@@ -205,21 +307,31 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
         'read_at': null,
         'created_at': FieldValue.serverTimestamp(),
       });
+
       await batch.commit();
+
       await GiventsAnalyticsService.instance.applicationDecision(
         data['event_id'] as String,
         status,
       );
+
       await widget.onChanged();
+
       if (!mounted) return;
+
       Navigator.of(context).pop();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Application update error: $e');
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not update application.')),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
@@ -233,11 +345,26 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
             .doc(widget.applicationId)
             .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return const Center(
+              child: Text('Could not load application details.'),
+            );
+          }
+
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
-          final data = snapshot.data!.data()!;
+
+          final data = snapshot.data!.data();
+
+          if (data == null) {
+            return const Center(child: Text('Application not found.'));
+          }
+
           final status = data['application_status'] as String? ?? 'pending';
+
+          final fee = data['booth_fee_amount'] as num? ?? 0;
+
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -245,15 +372,20 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                 data['vendor_name'] as String? ?? '',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
+
               const SizedBox(height: 12),
+
               Text('Status: $status'),
+
               Text('Products: ${data['products_to_sell'] ?? ''}'),
-              Text(
-                'Booth fee: ₱${(data['booth_fee_amount'] as num).toStringAsFixed(0)}',
-              ),
+
+              Text('Booth fee: ₱${fee.toStringAsFixed(0)}'),
+
               Text('Requested slot: ${data['requested_slot_id'] ?? ''}'),
+
               if (status == 'pending') ...[
                 const SizedBox(height: 16),
+
                 TextField(
                   controller: _rejectionReason,
                   decoration: const InputDecoration(
@@ -261,7 +393,9 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                   ),
                   maxLines: 2,
                 ),
+
                 const SizedBox(height: 16),
+
                 Row(
                   children: [
                     Expanded(
@@ -272,7 +406,9 @@ class _ApplicationDetailScreenState extends State<ApplicationDetailScreen> {
                         child: const Text('Reject'),
                       ),
                     ),
+
                     const SizedBox(width: 12),
+
                     Expanded(
                       child: FilledButton(
                         onPressed: _busy

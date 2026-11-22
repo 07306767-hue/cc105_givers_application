@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import '../services/givents_services.dart';
 
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key});
+  const CreateEventScreen({super.key, this.draftId});
+
+  final String? draftId;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
@@ -21,12 +23,31 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _province = TextEditingController(text: 'Albay');
   final _slots = TextEditingController();
   final _fee = TextEditingController();
+
   String _category = 'Fair';
   DateTime? _date;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
+
+  // Map coordinates (to be supplied by the map implementation).
+  double? _latitude;
+  double? _longitude;
+
   String? _draftId;
   bool _saving = false;
+  bool _loadingDraft = false;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _draftId = widget.draftId;
+
+    if (_draftId != null) {
+      _loadExistingDraft();
+    }
+  }
 
   @override
   void dispose() {
@@ -48,8 +69,74 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   String _timeString(TimeOfDay time) =>
       '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
 
+  Future<void> _loadExistingDraft() async {
+    setState(() {
+      _loadingDraft = true;
+      _loadError = null;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        throw Exception('Please log in again.');
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('events')
+          .doc(_draftId)
+          .get();
+
+      if (!doc.exists) {
+        throw Exception('This draft no longer exists.');
+      }
+
+      final data = doc.data()!;
+
+      if (data['organizer_profile_id'] != user.uid) {
+        throw Exception('You cannot edit this event.');
+      }
+
+      _title.text = data['event_title'] ?? '';
+      _description.text = data['event_description'] ?? '';
+      _venue.text = data['venue_name'] ?? '';
+      _venueAddress.text = data['venue_address'] ?? '';
+      _city.text = data['city'] ?? '';
+      _province.text = data['province'] ?? '';
+      _slots.text = data['total_slots']?.toString() ?? '';
+      _fee.text = data['booth_fee']?.toString() ?? '';
+
+      _category = data['event_category'] ?? 'Fair';
+
+      // Load previously saved map coordinates, if available.
+      _latitude = (data['latitude'] as num?)?.toDouble();
+      _longitude = (data['longitude'] as num?)?.toDouble();
+
+      if (data['event_date'] is Timestamp) {
+        _date = (data['event_date'] as Timestamp).toDate();
+      }
+
+      final start = (data['start_time'] ?? '09:00').split(':');
+      final end = (data['end_time'] ?? '18:00').split(':');
+
+      _startTime = TimeOfDay(
+        hour: int.parse(start[0]),
+        minute: int.parse(start[1]),
+      );
+
+      _endTime = TimeOfDay(hour: int.parse(end[0]), minute: int.parse(end[1]));
+    } catch (e) {
+      _loadError = e.toString();
+    } finally {
+      if (mounted) {
+        setState(() => _loadingDraft = false);
+      }
+    }
+  }
+
   Map<String, dynamic> _eventData(String status) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
+
     return {
       'organizer_profile_id': uid,
       'event_title': _title.text.trim(),
@@ -62,6 +149,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       'venue_address': _venueAddress.text.trim(),
       'city': _city.text.trim(),
       'province': _province.text.trim(),
+
+      // Optional coordinates for map integration.
+      'latitude': _latitude,
+      'longitude': _longitude,
+
       'total_slots': int.parse(_slots.text.trim()),
       'booth_fee': double.parse(_fee.text.trim()),
       'event_status': status,
@@ -74,6 +166,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   bool _validate() {
     if (!_formKey.currentState!.validate()) return false;
+
     if (_date == null || _startTime == null || _endTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -82,39 +175,52 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       );
       return false;
     }
+
     final slots = int.tryParse(_slots.text.trim()) ?? 0;
     final cap = GiventsRemoteConfigService.instance.maxBoothSlots;
+
     if (slots < 1 || slots > cap) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Slots must be from 1 to $cap.')));
       return false;
     }
+
     return true;
   }
 
   Future<void> _saveDraft() async {
     if (!_validate()) return;
+
     setState(() => _saving = true);
+
     try {
+      final firestore = FirebaseFirestore.instance;
       final data = _eventData('draft');
+
       if (_draftId == null) {
-        final ref = await FirebaseFirestore.instance
-            .collection('events')
-            .add(data);
+        final ref = await firestore.collection('events').add(data);
+
         _draftId = ref.id;
+
         await ref.update({'event_id': ref.id});
       } else {
-        await FirebaseFirestore.instance
-            .collection('events')
-            .doc(_draftId)
-            .set(data, SetOptions(merge: true));
+        await firestore.collection('events').doc(_draftId).set({
+          ...data,
+          'event_id': _draftId,
+        }, SetOptions(merge: true));
       }
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Draft saved.')));
-    } catch (_) {
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Draft saved successfully.')),
+      );
+    } catch (e) {
+      debugPrint('Save draft error: $e');
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Could not save draft.')));
     } finally {
@@ -124,11 +230,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   Future<void> _review() async {
     if (!_validate()) return;
+
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ReviewPublishScreen(
           draftId: _draftId,
-          eventData: _eventData('draft'),
+          eventData: {..._eventData('draft'), 'event_id': _draftId},
           slotCount: int.parse(_slots.text),
         ),
       ),
@@ -137,8 +244,41 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingDraft) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Draft')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_loadError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Edit Draft')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 12),
+                Text(_loadError!, textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Go back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event')),
+      appBar: AppBar(
+        title: Text(_draftId == null ? 'Create Event' : 'Edit Draft'),
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -152,6 +292,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   value == null || value.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
             DropdownButtonFormField<String>(
               key: const Key('event_category'),
               initialValue: _category,
@@ -164,9 +305,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) => setState(() => _category = value!),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _category = value);
+                }
+              },
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               key: const Key('event_description'),
               controller: _description,
@@ -176,6 +322,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   value == null || value.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(
@@ -189,10 +336,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   context: context,
                   firstDate: DateTime.now(),
                   lastDate: DateTime.now().add(const Duration(days: 730)),
+                  initialDate: _date,
                 );
-                if (date != null) setState(() => _date = date);
+
+                if (date != null) {
+                  setState(() => _date = date);
+                }
               },
             ),
+
             Row(
               children: [
                 Expanded(
@@ -206,9 +358,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     onTap: () async {
                       final time = await showTimePicker(
                         context: context,
-                        initialTime: TimeOfDay.now(),
+                        initialTime: _startTime ?? TimeOfDay.now(),
                       );
-                      if (time != null) setState(() => _startTime = time);
+
+                      if (time != null) {
+                        setState(() => _startTime = time);
+                      }
                     },
                   ),
                 ),
@@ -223,16 +378,21 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     onTap: () async {
                       final time = await showTimePicker(
                         context: context,
-                        initialTime: TimeOfDay.now(),
+                        initialTime: _endTime ?? TimeOfDay.now(),
                       );
-                      if (time != null) setState(() => _endTime = time);
+
+                      if (time != null) {
+                        setState(() => _endTime = time);
+                      }
                     },
                   ),
                 ),
               ],
             ),
+
             const Text('Philippine Standard Time UTC+08:00'),
             const SizedBox(height: 12),
+
             TextFormField(
               key: const Key('event_venue'),
               controller: _venue,
@@ -241,6 +401,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   value == null || value.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _venueAddress,
               decoration: const InputDecoration(labelText: 'Venue address *'),
@@ -248,6 +409,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   value == null || value.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _city,
               decoration: const InputDecoration(labelText: 'City *'),
@@ -255,6 +417,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   value == null || value.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               controller: _province,
               decoration: const InputDecoration(labelText: 'Province *'),
@@ -262,11 +425,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   value == null || value.trim().isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 12),
+
             OutlinedButton(
               onPressed: () {},
               child: const Text('Pin your event on the map'),
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               key: const Key('event_slots'),
               controller: _slots,
@@ -276,6 +441,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   int.tryParse(value ?? '') == null ? 'Enter a number' : null,
             ),
             const SizedBox(height: 12),
+
             TextFormField(
               key: const Key('event_fee'),
               controller: _fee,
@@ -286,11 +452,13 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   : null,
             ),
             const SizedBox(height: 12),
+
             OutlinedButton(
               onPressed: () {},
               child: const Text('Event photo (JPG/PNG)'),
             ),
             const SizedBox(height: 24),
+
             Row(
               children: [
                 Expanded(
@@ -336,28 +504,33 @@ class _ReviewPublishScreenState extends State<ReviewPublishScreen> {
 
   Future<void> _publish() async {
     if (widget.slotCount > 400) return;
+
     setState(() => _publishing = true);
+
     try {
       final firestore = FirebaseFirestore.instance;
-      DocumentReference<Map<String, dynamic>> eventRef;
-      if (widget.draftId != null) {
-        eventRef = firestore.collection('events').doc(widget.draftId);
-      } else {
-        eventRef = firestore.collection('events').doc();
-      }
+
+      final eventRef = widget.draftId != null
+          ? firestore.collection('events').doc(widget.draftId)
+          : firestore.collection('events').doc();
 
       final batch = firestore.batch();
+
       final eventData = Map<String, dynamic>.from(widget.eventData);
+
       eventData['event_id'] = eventRef.id;
       eventData['event_status'] = 'published';
       eventData['published_at'] = FieldValue.serverTimestamp();
+
       batch.set(eventRef, eventData);
 
       for (var i = 1; i <= widget.slotCount; i++) {
         final code = 'A$i';
+
         final slotRef = firestore
             .collection('booth_slots')
             .doc('${eventRef.id}_$code');
+
         batch.set(slotRef, {
           'slot_id': '${eventRef.id}_$code',
           'event_id': eventRef.id,
@@ -367,6 +540,7 @@ class _ReviewPublishScreenState extends State<ReviewPublishScreen> {
           'reserved_at': null,
         });
       }
+
       batch.set(firestore.collection('notifications').doc(), {
         'recipient_user_id': FirebaseAuth.instance.currentUser!.uid,
         'related_event_id': eventRef.id,
@@ -378,24 +552,34 @@ class _ReviewPublishScreenState extends State<ReviewPublishScreen> {
         'read_at': null,
         'created_at': FieldValue.serverTimestamp(),
       });
+
       await batch.commit();
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Event published.')));
+
       Navigator.of(context).popUntil((route) => route.isFirst);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Publish event error: $e');
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Could not publish event.')));
     } finally {
-      if (mounted) setState(() => _publishing = false);
+      if (mounted) {
+        setState(() => _publishing = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final data = widget.eventData;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Review and Publish')),
       body: ListView(
@@ -411,9 +595,7 @@ class _ReviewPublishScreenState extends State<ReviewPublishScreen> {
           Text('Address: ${data['venue_address']}'),
           Text('${data['city']}, ${data['province']}'),
           Text('Slots: ${data['total_slots']}'),
-          Text(
-            'Booth fee: ₱${(data['booth_fee'] as double).toStringAsFixed(0)}',
-          ),
+          Text('Booth fee: ₱${(data['booth_fee'] as num).toStringAsFixed(0)}'),
           const SizedBox(height: 16),
           Text(data['event_description'] as String),
           const SizedBox(height: 24),

@@ -67,10 +67,16 @@ class _EventsScreenState extends State<EventsScreen> {
         _hasMore = snapshot.docs.length == 20;
       });
     } catch (error) {
+      debugPrint('FIRESTORE EVENTS ERROR: $error');
+
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Could not load events.')));
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not load events: $error'),
+          duration: const Duration(seconds: 10),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() {

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'attendee/calendar_screen.dart';
+import 'organizer/organizer_overview_screen.dart';
+import 'vendor/vendor_home_screen.dart';
 import 'auth/auth_service.dart';
 import 'attendee/events_screen.dart';
 import 'organizer/create_event_screen.dart';
@@ -76,8 +79,12 @@ class _RoleBasedAppShellState extends State<RoleBasedAppShell> {
       ),
       body: widget.role == GiventsRole.attendee && safeIndex == 0
           ? LostFoundAwareEvents(role: widget.role)
+          : widget.role == GiventsRole.attendee && safeIndex == 1
+          ? const CalendarScreen()
           : widget.role == GiventsRole.attendee && safeIndex == 3
           ? const NotificationsScreen()
+          : widget.role == GiventsRole.organizer && safeIndex == 0
+          ? const OrganizerOverviewScreen()
           : widget.role == GiventsRole.organizer && safeIndex == 1
           ? OrganizerEventsPlaceholder(
               onCreate: () {
@@ -97,6 +104,10 @@ class _RoleBasedAppShellState extends State<RoleBasedAppShell> {
           ? const OrganizerProfileScreen()
           : widget.role == GiventsRole.organizer && safeIndex == 2
           ? const OrganizerApplicationsScreen()
+          : widget.role == GiventsRole.vendor && safeIndex == 0
+          ? const VendorHomeScreen()
+          : widget.role == GiventsRole.vendor && safeIndex == 1
+          ? const EventsScreen(role: GiventsRole.vendor)
           : widget.role == GiventsRole.vendor && safeIndex == 3
           ? const VendorProfileScreen()
           : widget.role == GiventsRole.vendor && safeIndex == 2
