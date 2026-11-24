@@ -16,6 +16,9 @@ class GiventsEvent {
     required this.province,
     required this.totalSlots,
     required this.boothFee,
+    this.eventPhotoUrl,
+    this.latitude,
+    this.longitude,
   });
 
   factory GiventsEvent.fromSnapshot(
@@ -37,6 +40,9 @@ class GiventsEvent {
       province: data['province'] as String? ?? '',
       totalSlots: (data['total_slots'] as num).toInt(),
       boothFee: (data['booth_fee'] as num).toDouble(),
+      eventPhotoUrl: data['event_photo_url'] as String?,
+      latitude: (data['latitude'] as num?)?.toDouble(),
+      longitude: (data['longitude'] as num?)?.toDouble(),
     );
   }
 
@@ -54,4 +60,7 @@ class GiventsEvent {
   final String province;
   final int totalSlots;
   final double boothFee;
+  final String? eventPhotoUrl;
+  final double? latitude;
+  final double? longitude;
 }

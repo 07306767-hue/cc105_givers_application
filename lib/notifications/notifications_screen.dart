@@ -3,7 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, this.roleLabel});
+
+  final String? roleLabel;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -152,7 +154,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '$_unread unread · Applications, payments & event updates',
+                          '$_unread unread · ${widget.roleLabel ?? 'Applications, payments & event updates'}',
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),

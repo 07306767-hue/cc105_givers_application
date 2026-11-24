@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../app_shell.dart';
+import '../maps/open_street_map_view.dart';
 import '../vendor/vendor_application_screen.dart';
 import '../services/givents_services.dart';
+import 'events_map_screen.dart';
 import 'event_models.dart';
 
 class EventDetailScreen extends StatelessWidget {
@@ -29,11 +32,35 @@ class EventDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final latitude = event.latitude;
+    final longitude = event.longitude;
+    final hasLocation =
+        latitude != null &&
+        longitude != null &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Event Details')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (event.eventPhotoUrl != null &&
+              event.eventPhotoUrl!.isNotEmpty) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                event.eventPhotoUrl!,
+                height: 220,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           Chip(label: Text(event.category)),
           const SizedBox(height: 8),
           Text(event.title, style: Theme.of(context).textTheme.headlineSmall),
@@ -60,16 +87,39 @@ class EventDetailScreen extends StatelessWidget {
             '${event.venueName}, ${event.venueAddress}, ${event.city}, ${event.province}',
           ),
           const SizedBox(height: 8),
-          OutlinedButton(onPressed: () {}, child: const Text('Get route')),
-          const SizedBox(height: 12),
-          Container(
-            height: 140,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
+          SizedBox(
+            height: 220,
+            child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
+              child: OpenStreetMapView(
+                initialCenter: hasLocation
+                    ? LatLng(latitude, longitude)
+                    : legazpiMapCenter,
+                initialZoom: hasLocation ? 15 : 12,
+                markers: hasLocation
+                    ? [
+                        OsmMapMarker(
+                          point: LatLng(latitude, longitude),
+                          label: event.title,
+                        ),
+                      ]
+                    : const [],
+              ),
             ),
-            child: const Text('Map preview (ASSUMPTION placeholder)'),
+          ),
+          if (!hasLocation) ...[
+            const SizedBox(height: 8),
+            const Text('The organiser has not pinned this event location yet.'),
+          ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => EventsMapScreen(role: role)),
+              ),
+              icon: const Icon(Icons.map_outlined),
+              label: const Text('Open map view'),
+            ),
           ),
           const SizedBox(height: 16),
           const Text('ORGANIZED BY'),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'attendee/calendar_screen.dart';
+import 'attendee/events_map_screen.dart';
 import 'organizer/organizer_overview_screen.dart';
 import 'vendor/vendor_home_screen.dart';
 import 'auth/auth_service.dart';
@@ -16,6 +17,8 @@ import 'notifications/notifications_screen.dart';
 import 'lost_found/lost_found_screen.dart';
 
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 enum GiventsRole { attendee, organizer, vendor }
@@ -69,6 +72,44 @@ class _RoleBasedAppShellState extends State<RoleBasedAppShell> {
       appBar: AppBar(
         title: Text(labels[safeIndex]),
         actions: [
+          if (widget.role != GiventsRole.attendee &&
+              !(widget.role == GiventsRole.vendor && safeIndex == 1))
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseAuth.instance.currentUser == null
+                  ? null
+                  : FirebaseFirestore.instance
+                        .collection('notifications')
+                        .where(
+                          'recipient_user_id',
+                          isEqualTo: FirebaseAuth.instance.currentUser!.uid,
+                        )
+                        .limit(50)
+                        .snapshots(),
+              builder: (context, snapshot) {
+                final unread =
+                    snapshot.data?.docs
+                        .where((doc) => doc.data()['is_read'] == false)
+                        .length ??
+                    0;
+                return IconButton(
+                  tooltip: 'Notifications',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => NotificationsScreen(
+                        roleLabel: widget.role == GiventsRole.vendor
+                            ? 'Vendor notifications'
+                            : 'Organizer notifications',
+                      ),
+                    ),
+                  ),
+                  icon: Badge(
+                    isLabelVisible: unread > 0,
+                    label: Text(unread > 99 ? '99+' : unread.toString()),
+                    child: const Icon(Icons.notifications_outlined),
+                  ),
+                );
+              },
+            ),
           if (kDebugMode && !kIsWeb)
             IconButton(
               tooltip: 'Test crash',
@@ -81,6 +122,8 @@ class _RoleBasedAppShellState extends State<RoleBasedAppShell> {
           ? LostFoundAwareEvents(role: widget.role)
           : widget.role == GiventsRole.attendee && safeIndex == 1
           ? const CalendarScreen()
+          : widget.role == GiventsRole.attendee && safeIndex == 2
+          ? EventsMapContent(role: widget.role)
           : widget.role == GiventsRole.attendee && safeIndex == 3
           ? const NotificationsScreen()
           : widget.role == GiventsRole.organizer && safeIndex == 0

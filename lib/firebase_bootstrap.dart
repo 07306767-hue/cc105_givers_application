@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 const useFirebaseEmulators = bool.fromEnvironment(
   'USE_FIREBASE_EMULATORS',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 Future<void> connectFirebaseEmulators() async {

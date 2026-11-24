@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app_shell.dart';
 import '../notifications/notifications_screen.dart';
+import 'events_map_screen.dart';
 import 'event_models.dart';
 import 'event_detail_screen.dart';
 import '../services/givents_services.dart';
@@ -171,6 +172,15 @@ class _EventsScreenState extends State<EventsScreen> {
                   ),
                 ),
               IconButton(
+                tooltip: 'Map view',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => EventsMapScreen(role: widget.role),
+                  ),
+                ),
+                icon: const Icon(Icons.map_outlined),
+              ),
+              IconButton(
                 tooltip: 'Filter',
                 onPressed: () {},
                 icon: const Icon(Icons.filter_list),
@@ -260,25 +270,65 @@ class _EventCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+          padding: const EdgeInsets.all(12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(event.title, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 6),
-              Text('$dateLabel  •  ${event.startTime}–${event.endTime}'),
-              const SizedBox(height: 4),
-              Text('${event.venueName}, ${event.city}, ${event.province}'),
-              const SizedBox(height: 10),
-              FutureBuilder<int>(
-                future: openSlotCount(),
-                builder: (context, snapshot) {
-                  final open = snapshot.data ?? 0;
-                  return Text(
-                    '$open / ${event.totalSlots} Open Slots',
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  );
-                },
+              if (event.eventPhotoUrl != null &&
+                  event.eventPhotoUrl!.isNotEmpty) ...[
+                SizedBox(
+                  width: 112,
+                  height: 128,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      event.eventPhotoUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => const Center(
+                        child: Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '$dateLabel  •  ${event.startTime}–${event.endTime}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${event.venueName}, ${event.city}, ${event.province}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+                    FutureBuilder<int>(
+                      future: openSlotCount(),
+                      builder: (context, snapshot) {
+                        final open = snapshot.data ?? 0;
+                        return Text(
+                          '$open / ${event.totalSlots} Open Slots',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

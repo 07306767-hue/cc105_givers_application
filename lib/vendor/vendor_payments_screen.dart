@@ -207,16 +207,44 @@ class _VendorPaymentsScreenState extends State<VendorPaymentsScreen> {
                 : null,
           });
 
-      if (result == 'paid') {
-        final uid = FirebaseAuth.instance.currentUser!.uid;
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final eventId = application.data()['event_id'] as String;
+      final vendorName =
+          application.data()['vendor_name'] as String? ?? 'A vendor';
+      final event = await FirebaseFirestore.instance
+          .collection('events')
+          .doc(eventId)
+          .get();
+      final organizerId = event.data()?['organizer_profile_id'] as String?;
 
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'recipient_user_id': uid,
+        'related_event_id': eventId,
+        'related_application_id': applicationId,
+        'notification_type': 'payment',
+        'title': result == 'paid'
+            ? 'Payment confirmed'
+            : 'Payment needs retry',
+        'message': result == 'paid'
+            ? 'Your GCash mock payment was confirmed.'
+            : 'Your GCash mock payment failed. Please retry.',
+        'is_read': false,
+        'read_at': null,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
+      if (organizerId != null) {
         await FirebaseFirestore.instance.collection('notifications').add({
-          'recipient_user_id': uid,
-          'related_event_id': application.data()['event_id'],
+          'recipient_user_id': organizerId,
+          'related_event_id': eventId,
           'related_application_id': applicationId,
           'notification_type': 'payment',
-          'title': 'Payment confirmed',
-          'message': 'Your GCash mock payment was confirmed.',
+          'title': result == 'paid'
+              ? 'Vendor payment confirmed'
+              : 'Vendor payment failed',
+          'message': result == 'paid'
+              ? '$vendorName completed a booth payment.'
+              : '$vendorName attempted a booth payment but it failed.',
           'is_read': false,
           'read_at': null,
           'created_at': FieldValue.serverTimestamp(),

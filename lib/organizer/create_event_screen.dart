@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 
+import '../services/cloudinary_image_service.dart';
 import '../services/givents_services.dart';
+import 'event_location_picker_screen.dart';
 
 class CreateEventScreen extends StatefulWidget {
   const CreateEventScreen({super.key, this.draftId});
@@ -34,7 +37,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   double? _longitude;
 
   String? _draftId;
+  String? _eventPhotoUrl;
   bool _saving = false;
+  bool _uploadingPhoto = false;
   bool _loadingDraft = false;
   String? _loadError;
 
@@ -107,6 +112,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       _fee.text = data['booth_fee']?.toString() ?? '';
 
       _category = data['event_category'] ?? 'Fair';
+      _eventPhotoUrl = data['event_photo_url'] as String?;
 
       // Load previously saved map coordinates, if available.
       _latitude = (data['latitude'] as num?)?.toDouble();
@@ -157,6 +163,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       'total_slots': int.parse(_slots.text.trim()),
       'booth_fee': double.parse(_fee.text.trim()),
       'event_status': status,
+      'event_photo_url': _eventPhotoUrl,
       'created_at': FieldValue.serverTimestamp(),
       'published_at': status == 'published'
           ? FieldValue.serverTimestamp()
@@ -226,6 +233,43 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _uploadEventPhoto() async {
+    setState(() => _uploadingPhoto = true);
+    try {
+      final url = await CloudinaryImageService().pickAndUploadImage();
+      if (url == null || !mounted) return;
+      setState(() => _eventPhotoUrl = url);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Event photo uploaded.')));
+    } catch (error) {
+      debugPrint('Event photo upload error: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not upload event photo: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  Future<void> _pickEventLocation() async {
+    final currentPosition = _latitude == null || _longitude == null
+        ? null
+        : LatLng(_latitude!, _longitude!);
+    final position = await Navigator.of(context).push<LatLng>(
+      MaterialPageRoute(
+        builder: (_) =>
+            EventLocationPickerScreen(initialPosition: currentPosition),
+      ),
+    );
+
+    if (position == null || !mounted) return;
+    setState(() {
+      _latitude = position.latitude;
+      _longitude = position.longitude;
+    });
   }
 
   Future<void> _review() async {
@@ -426,10 +470,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             ),
             const SizedBox(height: 12),
 
-            OutlinedButton(
-              onPressed: () {},
-              child: const Text('Pin your event on the map'),
+            OutlinedButton.icon(
+              onPressed: _saving ? null : _pickEventLocation,
+              icon: const Icon(Icons.location_on_outlined),
+              label: Text(
+                _latitude == null || _longitude == null
+                    ? 'Pin your event on the map'
+                    : 'Change pinned event location',
+              ),
             ),
+            if (_latitude != null && _longitude != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Pinned at ${_latitude!.toStringAsFixed(5)}, '
+                '${_longitude!.toStringAsFixed(5)}',
+              ),
+            ],
             const SizedBox(height: 12),
 
             TextFormField(
@@ -453,9 +509,38 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             ),
             const SizedBox(height: 12),
 
-            OutlinedButton(
-              onPressed: () {},
-              child: const Text('Event photo (JPG/PNG)'),
+            if (_eventPhotoUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.network(
+                  _eventPhotoUrl!,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox(
+                    height: 180,
+                    child: Center(child: Text('Could not load event photo.')),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            OutlinedButton.icon(
+              onPressed: _uploadingPhoto || _saving ? null : _uploadEventPhoto,
+              icon: _uploadingPhoto
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.photo_library_outlined),
+              label: Text(
+                _uploadingPhoto
+                    ? 'Uploading photo...'
+                    : _eventPhotoUrl == null
+                    ? 'Event photo (JPG/PNG)'
+                    : 'Change event photo',
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -463,14 +548,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _saving ? null : _saveDraft,
+                    onPressed: _saving || _uploadingPhoto ? null : _saveDraft,
                     child: const Text('Save draft'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: FilledButton(
-                    onPressed: _saving ? null : _review,
+                    onPressed: _saving || _uploadingPhoto ? null : _review,
                     child: const Text('Review event'),
                   ),
                 ),
@@ -596,6 +681,22 @@ class _ReviewPublishScreenState extends State<ReviewPublishScreen> {
           Text('${data['city']}, ${data['province']}'),
           Text('Slots: ${data['total_slots']}'),
           Text('Booth fee: ₱${(data['booth_fee'] as num).toStringAsFixed(0)}'),
+          if (data['event_photo_url'] is String) ...[
+            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                data['event_photo_url'] as String,
+                height: 180,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const SizedBox(
+                  height: 180,
+                  child: Center(child: Text('Could not load event photo.')),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Text(data['event_description'] as String),
           const SizedBox(height: 24),

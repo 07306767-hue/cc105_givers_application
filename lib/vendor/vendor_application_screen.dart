@@ -178,6 +178,19 @@ class _VendorApplicationScreenState extends State<VendorApplicationScreen> {
         'created_at': FieldValue.serverTimestamp(),
       });
 
+      await firestore.collection('notifications').add({
+        'recipient_user_id': widget.event.organizerId,
+        'related_event_id': widget.event.id,
+        'related_application_id': applicationId,
+        'notification_type': 'application',
+        'title': 'New booth application',
+        'message':
+            '${_vendorProfile!['business_name'] as String? ?? 'A vendor'} applied for a booth.',
+        'is_read': false,
+        'read_at': null,
+        'created_at': FieldValue.serverTimestamp(),
+      });
+
       await GiventsAnalyticsService.instance.applicationSubmitted(
         widget.event.id,
       );

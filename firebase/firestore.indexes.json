@@ -4,6 +4,15 @@
       "collectionGroup": "events",
       "queryScope": "COLLECTION",
       "fields": [
+        {"fieldPath": "organizer_profile_id", "order": "ASCENDING"},
+        {"fieldPath": "event_status", "order": "ASCENDING"},
+        {"fieldPath": "event_date", "order": "ASCENDING"}
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
         {"fieldPath": "event_status", "order": "ASCENDING"},
         {"fieldPath": "event_date", "order": "ASCENDING"}
       ]

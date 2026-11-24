@@ -9,7 +9,7 @@ let testEnv;
 
 before(async () => {
   testEnv = await initializeTestEnvironment({
-    projectId: "givents-local",
+    projectId: "givents-database",
     firestore: {
       host: "127.0.0.1",
       port: 8080,

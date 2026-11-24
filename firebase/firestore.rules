@@ -4,6 +4,21 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function uid() { return request.auth.uid; }
     function role() { return get(/databases/$(database)/documents/users/$(uid())).data.role; }
+    function vendorCanReserveSlot(slotId) {
+      let applicationId = request.resource.data.reserved_application_id;
+      let application = getAfter(/databases/$(database)/documents/applications/$(applicationId));
+      return signedIn()
+        && role() == 'vendor'
+        && resource.data.slot_status == 'open'
+        && request.resource.data.slot_status == 'reserved'
+        && request.resource.data.reserved_application_id is string
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['slot_status', 'reserved_application_id', 'reserved_at'])
+        && application.data.vendor_profile_id == uid()
+        && application.data.event_id == resource.data.event_id
+        && application.data.requested_slot_id == slotId
+        && application.data.application_status == 'pending';
+    }
 
     match /users/{userId} {
       allow read: if signedIn() && uid() == userId;
@@ -57,15 +72,23 @@ service cloud.firestore {
       allow create, update: if signedIn() && role() == 'organizer'
         && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.organizer_profile_id == uid()
         && request.resource.data.slot_status in ['open', 'reserved'];
+      allow update: if vendorCanReserveSlot(slotId);
       allow delete: if false;
     }
 
     match /applications/{applicationId} {
-      allow read: if signedIn()
+      allow get: if signedIn()
+        && (role() == 'vendor'
+              && (applicationId.matches('.*_' + uid())
+                || resource.data.vendor_profile_id == uid())
+          || role() == 'organizer'
+            && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid());
+      allow list: if signedIn()
         && (role() == 'vendor' && resource.data.vendor_profile_id == uid()
           || role() == 'organizer'
             && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid());
       allow create: if signedIn() && role() == 'vendor'
+        && applicationId == request.resource.data.event_id + '_' + uid()
         && request.resource.data.vendor_profile_id == uid()
         && request.resource.data.application_status == 'pending'
         && get(/databases/$(database)/documents/events/$(request.resource.data.event_id)).data.booth_fee
@@ -83,11 +106,18 @@ service cloud.firestore {
     }
 
     match /payments/{paymentId} {
-      allow read: if signedIn()
+      allow get: if signedIn()
+        && (role() == 'vendor'
+              && (paymentId.matches('.*_' + uid() + '_[0-9]+')
+                || resource.data.vendor_profile_id == uid())
+          || role() == 'organizer'
+            && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid());
+      allow list: if signedIn()
         && (role() == 'vendor' && resource.data.vendor_profile_id == uid()
           || role() == 'organizer'
             && get(/databases/$(database)/documents/events/$(resource.data.event_id)).data.organizer_profile_id == uid());
       allow create: if signedIn() && role() == 'vendor'
+        && paymentId.matches('.*_' + uid() + '_[0-9]+')
         && request.resource.data.vendor_profile_id == uid()
         && request.resource.data.payment_status == 'pending'
         && get(/databases/$(database)/documents/applications/$(request.resource.data.application_id)).data.vendor_profile_id == uid()

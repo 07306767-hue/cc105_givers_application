@@ -41,50 +41,46 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDSCgVyryWUHe5VLDxHHylBUgX4PCUWfiA',
-    appId: '1:418799409767:web:f4d159199d1bb31ca892c2',
-    messagingSenderId: '418799409767',
-    projectId: 'givents-database-cd1c1',
-    authDomain: 'givents-database-cd1c1.firebaseapp.com',
-    storageBucket: 'givents-database-cd1c1.firebasestorage.app',
-    measurementId: 'G-PR8ESHE55D',
+    apiKey: 'AIzaSyAoMld3yh9QcKPnmfqvki-FTy5FJaQDh8A',
+    appId: '1:969478873518:web:71f23be6fa350bd99fe83f',
+    messagingSenderId: '969478873518',
+    projectId: 'givents-database',
+    authDomain: 'givents-database.firebaseapp.com',
+    storageBucket: 'givents-database.firebasestorage.app',
+    measurementId: 'G-JCL300S3ZX',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAFErQU_NMBRdAyx2J6qv8MFIcV_eCZrKo',
-    appId: '1:418799409767:android:84e543e1fd8b57a7a892c2',
-    messagingSenderId: '418799409767',
-    projectId: 'givents-database-cd1c1',
-    storageBucket: 'givents-database-cd1c1.firebasestorage.app',
+    apiKey: 'AIzaSyC9v6WXn7cn57h_yy3-3ERyfnmTgVCdjCY',
+    appId: '1:969478873518:android:93d10303925ce41a9fe83f',
+    messagingSenderId: '969478873518',
+    projectId: 'givents-database',
+    storageBucket: 'givents-database.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAx6wyLIPS2zI8va0dWRBprq7HyLCYJG_Q',
-    appId: '1:418799409767:ios:4f67d1aff55483a6a892c2',
-    messagingSenderId: '418799409767',
-    projectId: 'givents-database-cd1c1',
-    storageBucket: 'givents-database-cd1c1.firebasestorage.app',
-    iosClientId: '418799409767-01u3a4ui974h89sd40i9rn7r6o1irn62.apps.googleusercontent.com',
+    apiKey: 'AIzaSyAiiRE753N4pVHl-i92SqHFrLqHTM4ocUU',
+    appId: '1:969478873518:ios:2711da6536f706e39fe83f',
+    messagingSenderId: '969478873518',
+    projectId: 'givents-database',
+    storageBucket: 'givents-database.firebasestorage.app',
     iosBundleId: 'com.example.cc105GiversDocumentation',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyAx6wyLIPS2zI8va0dWRBprq7HyLCYJG_Q',
-    appId: '1:418799409767:ios:4f67d1aff55483a6a892c2',
-    messagingSenderId: '418799409767',
-    projectId: 'givents-database-cd1c1',
-    storageBucket: 'givents-database-cd1c1.firebasestorage.app',
-    iosClientId: '418799409767-01u3a4ui974h89sd40i9rn7r6o1irn62.apps.googleusercontent.com',
+    apiKey: 'AIzaSyAiiRE753N4pVHl-i92SqHFrLqHTM4ocUU',
+    appId: '1:969478873518:ios:2711da6536f706e39fe83f',
+    messagingSenderId: '969478873518',
+    projectId: 'givents-database',
+    storageBucket: 'givents-database.firebasestorage.app',
     iosBundleId: 'com.example.cc105GiversDocumentation',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDSCgVyryWUHe5VLDxHHylBUgX4PCUWfiA',
-    appId: '1:418799409767:web:85aba62f98edcad5a892c2',
-    messagingSenderId: '418799409767',
-    projectId: 'givents-database-cd1c1',
-    authDomain: 'givents-database-cd1c1.firebaseapp.com',
-    storageBucket: 'givents-database-cd1c1.firebasestorage.app',
-    measurementId: 'G-GEK35FV6RV',
+    apiKey: 'AIzaSyAoMld3yh9QcKPnmfqvki-FTy5FJaQDh8A',
+    appId: '1:969478873518:web:fb872e781bfe50ed9fe83f',
+    messagingSenderId: '969478873518',
+    projectId: 'givents-database',
+    authDomain: 'givents-database.firebaseapp.com',
+    storageBucket: 'givents-database.firebasestorage.app',
+    measurementId: 'G-7SRFN0KWD1',
   );
 }

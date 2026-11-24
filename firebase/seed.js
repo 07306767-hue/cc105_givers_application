@@ -3,7 +3,7 @@ const admin = require("firebase-admin");
 process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9099";
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 
-admin.initializeApp({ projectId: "givents-local" });
+admin.initializeApp({ projectId: "givents-database" });
 
 const auth = admin.auth();
 const db = admin.firestore();
